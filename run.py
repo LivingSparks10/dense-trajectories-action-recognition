@@ -109,6 +109,21 @@ def main(already_computed_descriptors=False):
 
 if __name__ == '__main__':
     # to test trajectories on a single video
-    # trajectories_from_video('data/UnevenBars/v_UnevenBars_g01_c01.avi', vis_flow=False, vis_trajectories=True)
 
-    main(already_computed_descriptors=False)
+    path = "C:/Users/david/dev/Quayola-LucePose/input/Danza__02__HD30__H265(36).mp4"
+    vis_flow=True
+    vis_trajectories=False
+    W=10# sampling grid spacing int - FLOW DIPEND ON IT ### 5
+    L=15# maximum length of a trajectory int 
+    static_displacement_thresh=5# static if the sum of all displacements' norms is lower int 
+    max_single_displacement=0.7# max percentage a single displacement has in a trajectory
+    save=False
+
+    trajectories_from_video(path, vis_flow, vis_trajectories,W,L,static_displacement_thresh,max_single_displacement,save)
+    
+    # trajectories_from_video('data/UnevenBars/v_UnevenBars_g01_c01.avi', vis_flow=False, vis_trajectories=True)
+    trajectories_from_video("C:/Users/david/dev/Quayola-LucePose/input/Danza__02__HD30__H265(36).mp4", vis_flow=True, vis_trajectories=True,save=False)
+    #trajectories_from_video("C:/Users/david/dev/Quayola-LucePose/input/danceCut.mp4", vis_flow=True, vis_trajectories=True,save=True)
+    #trajectories_from_video("C:/Users/david/dev/Quayola-LucePose/input/Count.mov", vis_flow=True, vis_trajectories=True,save=True)
+
+    #main(already_computed_descriptors=False)

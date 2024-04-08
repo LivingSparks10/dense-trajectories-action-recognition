@@ -7,28 +7,72 @@ from settings import *
 from visualize import *
 
 
+
+
+def create_experiment_folder(base_folder):
+    """Create a folder for the experiment inside the 'runs' folder."""
+    runs_folder = os.path.join(base_folder, "runs")
+    if not os.path.exists(runs_folder):
+        os.makedirs(runs_folder)
+
+    # Find the experiment folders
+    experiment_folders = [folder for folder in os.listdir(runs_folder) if folder.startswith("exp")]
+    if not experiment_folders:
+        new_experiment_folder = os.path.join(runs_folder, "exp1")
+    else:
+        latest_experiment = max(experiment_folders, key=lambda x: int(x[3:]))
+        new_exp_num = int(latest_experiment[3:]) + 1
+        new_experiment_folder = os.path.join(runs_folder, f"exp{new_exp_num}")
+
+    os.makedirs(new_experiment_folder)
+    return new_experiment_folder
+
 def trajectories_from_video(path, vis_flow=False, vis_trajectories=False,
-                            W=W,  # sampling grid spacing
-                            L=L,  # maximum length of a trajectory
+                            grid_spacing=grid_spacing,  # sampling grid spacing
+                            max_len_traj=max_len_traj,  # maximum length of a trajectory
                             static_displacement_thresh=static_displacement_thresh,  # static if the sum of all displacements' norms is lower
                             max_single_displacement=max_single_displacement,  # max percentage a single displacement has in a trajectory
-                            ):
+                            save=False):
+    
+    experiment_folder = create_experiment_folder(os.getcwd())
+
     # read the video at 'path' frame by frame
     capture = cv.VideoCapture(path)
     r, current_frame = capture.read()
     current_frame = cv.cvtColor(current_frame, cv.COLOR_BGR2GRAY)
     height, width = current_frame.shape  # video resolution
 
+    fps = capture.get(cv.CAP_PROP_FPS)
+    codec = int(capture.get(cv.CAP_PROP_FOURCC))
+    frame_size = (int(capture.get(cv.CAP_PROP_FRAME_WIDTH)), int(capture.get(cv.CAP_PROP_FRAME_HEIGHT)))
+    total_frames = int(capture.get(cv.CAP_PROP_FRAME_COUNT))
+    """Save videos if save is True."""
+    filename = os.path.basename(path)
+    filename_no_ext, original_ext = os.path.splitext(filename)
+
     flow = None
     flow_list = []
 
-    grid_xs = list(range(0, width, W))
-    grid_ys = list(range(0, height, W))
+    grid_xs = list(range(0, width, grid_spacing))
+    grid_ys = list(range(0, height, grid_spacing))
 
     frame_i = 0
     trajectories = []
     complete_trajectories = []
     shape_descriptors = []
+
+    # if save:
+    #     fourcc = cv.VideoWriter_fourcc(*'XVID') # cv.VideoWriter_fourcc(*'mp4v')
+    #     flow_video_path = os.path.join(experiment_folder, f"{filename_no_ext}_flow.avi")
+    #     trajectories_video_path = os.path.join(experiment_folder, f"{filename_no_ext}_traj.avi")
+    #     flow_out = cv.VideoWriter(flow_video_path, fourcc, fps, frame_size)
+    #     trajectories_out = cv.VideoWriter(trajectories_video_path, fourcc, fps, frame_size)
+    if save:
+        fourcc = cv.VideoWriter_fourcc(*'avc1')  # H.264 codec
+        flow_video_path = os.path.join(experiment_folder, f"{filename_no_ext}_flow.mov")
+        trajectories_video_path = os.path.join(experiment_folder, f"{filename_no_ext}_traj.mov")
+        flow_out = cv.VideoWriter(flow_video_path, fourcc, fps, frame_size)
+        trajectories_out = cv.VideoWriter(trajectories_video_path, fourcc, fps, frame_size)
 
     print(f'{path}: extracting trajectories')
     while True:
@@ -86,17 +130,20 @@ def trajectories_from_video(path, vis_flow=False, vis_trajectories=False,
             # make corner coordinates discrete so we can use it as indices
             corners = np.int0(corners)
 
+            #flow_img = draw_flow(current_frame, flow, step=grid_spacing)
+            flow_img = draw_flow_hue(current_frame, flow, step=grid_spacing)
+            
             if vis_flow:
                 # VISUALIZE THE FLOW
-                cv.imshow('flow', draw_flow(current_frame, flow, step=W))
+                cv.imshow('flow', flow_img)
                 cv.waitKey(1)
 
             # init new trajectories at corners, if 1) they are on the grid, 2) no tracked points in WxW
             for c in corners:
                 x, y = c.ravel()
                 if x in grid_xs and y in grid_ys:  # if the corner is on the grid
-                    if not any(np.abs(y - t.coords[-1][1]) <= W and
-                               np.abs(x - t.coords[-1][0]) <= W
+                    if not any(np.abs(y - t.coords[-1][1]) <= grid_spacing and
+                               np.abs(x - t.coords[-1][0]) <= grid_spacing
                                for t in trajectories):  # if no tracked points in WxW
                         trajectories.append(Trajectory(y=y, x=x, start_frame_num=frame_i))
 
@@ -137,25 +184,41 @@ def trajectories_from_video(path, vis_flow=False, vis_trajectories=False,
                                                     :]
                     t.mbhy_volume.append(mbhy_volume_slice)
 
-                    # continue the trajectory to the next frame if it's length is less than L
+                    # continue the trajectory to the next frame if it's length is less than max_len_traj
                     t.add(delta_y=delta_y, delta_x=delta_x)
-                    if len(t.coords) > L:
-                        # take out the trajectory to the 'complete_trajectories' list if its length reached L
-                        t.coords = t.coords[:-1]  # remove last (L+1'th) coordinate pair referring to the next frame
+                    if len(t.coords) > max_len_traj:
+                        # take out the trajectory to the 'complete_trajectories' list if its length reached max_len_traj
+                        t.coords = t.coords[:-1]  # remove last (max_len_traj+1'th) coordinate pair referring to the next frame
                         complete_trajectories.append(t)
                         trajectories.remove(t)
 
+            trajectories_img = draw_trajectories(current_frame, trajectories)
             if vis_trajectories:
                 # VISUALIZE THE TRAJECTORIES
-                cv.imshow('flow', draw_trajectories(current_frame, trajectories))
+                cv.imshow('flow', trajectories_img)
                 cv.waitKey(1)
 
             flow_list.append(flow)  # append the flow to a list of flows to extract descriptors later
             current_frame = next_frame
             frame_i += 1
+            
+            if save:
+                # Write videos
+                flow_out.write(flow_img)
+                trajectories_out.write(trajectories_img)
+
+
+            percentage_processed = (frame_i / total_frames) * 100
+
+            print(f"Percentage processed: {percentage_processed:.2f}%")
 
         else:
             break
+
+    if save:
+        print("Release Writer")
+        flow_out.release()
+        trajectories_out.release()
 
     print(f'{len(complete_trajectories)} complete trajectories before post-processing')
 

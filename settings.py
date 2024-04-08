@@ -2,8 +2,8 @@ import os
 from os.path import join
 
 # TRACKING
-W = 5  # stride of the grid for sampling new tracks
-L = 15  # number of frames for each complete trajectory
+grid_spacing = 5  # stride of the grid for sampling new tracks
+max_len_traj = 15  # number of frames for each complete trajectory
 of_winsize = 20  # optical flow window size
 
 # Sh-Tomasi threshold on cornerness response function values
@@ -20,7 +20,7 @@ N2 = int(N / 2)
 n_sigma = 2  # number of tube grid cells by x and y
 n_tau = 3  # number of tube grid cells in time
 bins = 8  # number of bins for all the descriptors except HoF, which would be bins + 1
-len_descriptor = L * 2 + 3 * bins * n_sigma * n_sigma * n_tau + (bins + 1) * n_sigma * n_sigma * n_tau
+len_descriptor = max_len_traj * 2 + 3 * bins * n_sigma * n_sigma * n_tau + (bins + 1) * n_sigma * n_sigma * n_tau
 bin_angles = [int(i * 360 / bins) for i in range(bins + 1)]
 small_flow_magnitude = 1
 
